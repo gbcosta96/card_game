@@ -1,3 +1,4 @@
+import 'package:card_game/utils/dimensions.dart';
 import 'package:flutter/material.dart';
 
 class NumberGrid extends StatelessWidget {
@@ -12,8 +13,8 @@ class NumberGrid extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.symmetric(vertical: 5),
-      height: 250,
-      width: 200,
+      height: Dimensions.height(25),
+      width: Dimensions.width(10),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(5),
@@ -28,8 +29,8 @@ class NumberGrid extends StatelessWidget {
               }
             },
             child: Container(
-              width: 170,
-              height: 50,
+              width: Dimensions.greatest(7.5) + 20,
+              height: Dimensions.greatest(2.5),
               margin: const EdgeInsets.all(5),
               padding: const EdgeInsets.all(5),
               color: prohibited == 0 ? Colors.grey : Colors.white,
@@ -56,8 +57,8 @@ class NumberGrid extends StatelessWidget {
                   }
                 },
                 child: Container(
-                  width: 50,
-                  height: 50,
+                  width: Dimensions.greatest(2.5),
+                  height: Dimensions.greatest(2.5),
                   margin: const EdgeInsets.all(5),
                   padding: const EdgeInsets.all(5),
                   color: (i*3 + j + 1 <= cards && i*3 + j + 1 != prohibited)  ? Colors.white : Colors.grey,

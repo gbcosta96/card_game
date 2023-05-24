@@ -1,13 +1,12 @@
-import 'dart:async';
 
 import 'package:card_game/data/data_repository.dart';
 import 'package:card_game/model/player_model.dart';
 import 'package:card_game/model/room_model.dart';
 import 'package:card_game/screens/home_page.dart';
+import 'package:card_game/screens/truco_page.dart';
 import 'package:card_game/utils/app_colors.dart';
 import 'package:card_game/utils/dimensions.dart';
 import 'package:card_game/widget/button.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:card_game/widget/app_text.dart';
 
@@ -24,7 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController controllerName = TextEditingController();
   final TextEditingController controllerRoom= TextEditingController();
   List<RoomModel> rooms = [];
-  late StreamSubscription<QuerySnapshot> subsRoom;
+  
 
   
   Widget _inputField(Icon prefixIcon, String hintText, bool isPassword, TextEditingController controller) {
@@ -106,15 +105,22 @@ class _LoginPageState extends State<LoginPage> {
                 name: controllerName.text,
               );
               repository.addPlayer(controllerRoom.text, player);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) =>
-                  HomePage(
-                    playerName: controllerName.text,
-                    roomId: controllerRoom.text,
-                  ),
-                )
-              );
+              repository.getRoom(controllerRoom.text).then((room) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) =>
+                    room.game == Games.fodinha ?
+                    HomePage(
+                      playerName: controllerName.text,
+                      roomId: controllerRoom.text,
+                    ) : 
+                    TrucoPage(
+                      playerName: controllerName.text,
+                      roomId: controllerRoom.text,
+                    ),
+                  )
+                );
+              });
             }
             else {
               putSnack("Name taken!");
@@ -160,6 +166,36 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
+  void createTrucoRoom() {
+    if(checkFields() == false) {
+      return;
+    }
+    repository.checkRoom(controllerRoom.text).then((value) {
+      if(!value) {
+        RoomModel newRoom = RoomModel(
+          referenceId: controllerRoom.text,
+          game: Games.truco,
+        );
+        PlayerModel host = PlayerModel(
+          name: controllerName.text,
+        );
+        repository.addRoom(newRoom, host);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) =>
+            TrucoPage(
+              playerName: controllerName.text,
+              roomId: controllerRoom.text,
+            ),
+          )
+        );
+      }
+      else {
+        putSnack("Room already exists!");
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -167,11 +203,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void asyncInit() async {
-    rooms = await repository.getRooms();
-    print(rooms.length);
-    subsRoom = repository.getRoomsSnap().listen((event) {
+    repository.getRoomsSnap().listen((snap) {
       setState(() {
-        rooms = repository.roomsFromSnap(event.docs);
+        rooms = snap;
       });
     });
   }
@@ -202,9 +236,9 @@ class _LoginPageState extends State<LoginPage> {
                       },
                     ),
                     Button(
-                      text: "Create Truco room",
+                      text: "Create truco room",
                       onTap: () {
-                        //createRoom();
+                        createTrucoRoom();
                       },
                     ),
                     Button(

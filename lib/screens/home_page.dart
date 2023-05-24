@@ -8,13 +8,13 @@ import 'package:card_game/model/message_model.dart';
 import 'package:card_game/model/player_model.dart';
 import 'package:card_game/model/room_model.dart';
 import 'package:card_game/utils/app_colors.dart';
+import 'package:card_game/utils/dimensions.dart';
 import 'package:card_game/widget/app_icon.dart';
 import 'package:card_game/widget/app_text.dart';
 import 'package:card_game/widget/button.dart';
 import 'package:card_game/widget/card_widget.dart';
 import 'package:card_game/widget/message_widget.dart';
 import 'package:card_game/widget/number_grid.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
@@ -42,11 +42,6 @@ class _HomePageState extends State<HomePage> {
   List<CardModel> cards = [];
   List<MessageModel> messages = [];
 
-  late StreamSubscription<DocumentSnapshot> subsRoom;
-  late StreamSubscription<QuerySnapshot> subsPlayer;
-  late StreamSubscription<QuerySnapshot> subsCards;
-  late StreamSubscription<QuerySnapshot> subsMessages;
-
   bool highOp = false;
   late Timer timer;
   TextEditingController controller = TextEditingController();
@@ -56,43 +51,36 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    asyncInit();
+    _asyncInit();
   }
   
-  void asyncInit() async {
-    room = await repository.getRoom(widget.roomId);
-    players = await repository.getPlayers(widget.roomId);
-    cards = await repository.getCards(widget.roomId);
-    messages = await repository.getMessages(widget.roomId);
-
-    subsRoom = repository.getRoomSnap(widget.roomId).listen((event) { 
+  void _asyncInit() async {
+    repository.getRoomSnap(widget.roomId).listen((event) { 
       setState(() {
-        room = RoomModel.fromSnapshot(event);
+        room = event;
       });
     });
 
-    subsPlayer = repository.getPlayersSnap(widget.roomId).listen((event) {
-      if(event.docs.length < players.length) {
-        players = repository.playersFromSnap(event.docs);
-        newRound();
+    repository.getPlayersSnap(widget.roomId).listen((event) {
+      if(event.length < players.length) {
+        players = event;
+        _newRound();
       } else {
         setState(() {
-          players = repository.playersFromSnap(event.docs);
+          players = event;
         });
-        
       }
-      
     });
 
-    subsCards = repository.getCardsSnap(widget.roomId).listen((event) {
+    repository.getCardsSnap(widget.roomId).listen((event) {
       setState(() {
-        cards = repository.cardsFromSnap(event.docs);
+        cards = event;
       });
     });
 
-    subsMessages = repository.getMessagesSnap(widget.roomId).listen((event) {
+    repository.getMessagesSnap(widget.roomId).listen((event) {
       setState(() {
-        messages = repository.messagesFromSnap(event.docs);
+        messages = event;
       });
       scrollController.jumpTo(scrollController.position.maxScrollExtent);
     });
@@ -110,7 +98,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void newRound() async {
+  void _newRound() async {
     await repository.removeCards(widget.roomId);
     room!.cards = room!.cards >= 9 ? 1 : room!.cards + 1;
     room!.dealerPlayer = room!.dealerPlayer >= players.length - 1 ? 0 : room!.dealerPlayer + 1;
@@ -127,14 +115,14 @@ class _HomePageState extends State<HomePage> {
      await repository.addCards(widget.roomId, newCards);
   }
 
-  List<CardModel> sortedCards(int index) {
+  List<CardModel> _sortedRoundCards(int index) {
     List<CardModel> sorted = cards.where((element) =>
-        element.playerName == getPlayerBasedOnMe(index).name && element.round != 0).toList();
+        element.playerName == _getPlayerBasedOnMe(index).name && element.round != 0).toList();
     sorted.sort((a, b) => a.round.compareTo(b.round));
     return sorted;
   }
 
-  void playCard(CardModel card) async {
+  void _playCard(CardModel card) async {
     card.round = cards.where((element) => element.playerName == widget.playerName).reduce((value, element) => value.round > element.round ? value : element).round + 1;
     await repository.updateCard(widget.roomId, card);
 
@@ -148,56 +136,56 @@ class _HomePageState extends State<HomePage> {
         CardModel winner = cardsInRound.first;
         winner.win = true;
         await repository.updateCard(widget.roomId, winner);
-        PlayerModel winPlayer = getPlayer(name: winner.playerName);
+        PlayerModel winPlayer = _getPlayer(name: winner.playerName);
         winPlayer.currentPoints += 1;
         await repository.updatePlayer(widget.roomId, winPlayer);
-        room!.currentPlayer = getIndexOfPlayer(name: winPlayer.name);
+        room!.currentPlayer = _getIndexOfPlayer(name: winPlayer.name);
         await repository.updateRoom(widget.roomId, room!);
       }
       else {
-        changePlayer();
+        _changePlayer();
       }
       
 
       if(card.round == room!.cards) {
         for(var player in players) {
-          player.fails += (player.currentPoints - player.expectedPoints).abs();
+          player.points += (player.currentPoints - player.expectedPoints).abs();
           await repository.updatePlayer(widget.roomId, player);
         }
       }
     }
     else {
-      changePlayer();
+      _changePlayer();
     }
   }
 
-  Future<void> changePlayer() async {
+  Future<void> _changePlayer() async {
     room!.currentPlayer += 1;
     if(room!.currentPlayer >= players.length) room!.currentPlayer = 0;
     await repository.updateRoom(widget.roomId, room!);
   }
 
-  Color getColorOfPlayer({String? name}) {
-    int index = getIndexOfPlayer(name: name);
+  Color _getColorOfPlayer({String? name}) {
+    int index = _getIndexOfPlayer(name: name);
     if(index == -1) {
       index = 4;
     }
     return colors[index];
   }
 
-  int getIndexOfPlayer({String? name}) {
+  int _getIndexOfPlayer({String? name}) {
     return players.indexWhere((element) => element.name == (name ?? widget.playerName));
   }
 
-  PlayerModel getPlayer({String? name}) {
+  PlayerModel _getPlayer({String? name}) {
     return players.firstWhere((element) => element.name == (name ?? widget.playerName));
   }
 
-  PlayerModel getPlayerBasedOnMe(int pos) {
-    return players[(pos + getIndexOfPlayer()) % players.length];
+  PlayerModel _getPlayerBasedOnMe(int pos) {
+    return players[(pos + _getIndexOfPlayer()) % players.length];
   }
 
-  Widget widgetCards(List<CardModel> cards, CardPlace place, bool vertical) {
+  Widget _widgetCards(List<CardModel> cards, CardPlace place, bool vertical) {
     return Flex(
       direction: vertical ? Axis.vertical : Axis.horizontal,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -211,8 +199,8 @@ class _HomePageState extends State<HomePage> {
             cardPlace: place,
             testa: room!.cards == 1,
             onTap: () {
-              if(place == CardPlace.myHand && room!.currentPlayer == getIndexOfPlayer() && getPlayer().expectedPoints != -1) {
-                playCard(card);
+              if(place == CardPlace.myHand && room!.currentPlayer == _getIndexOfPlayer() && _getPlayer().expectedPoints != -1) {
+                _playCard(card);
               }
             },
           ),
@@ -221,25 +209,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget playerUI(int player) {
+  Widget _playerUI(int player) {
     return Container(
       margin: const EdgeInsets.all(10.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          AppText(text: getPlayerBasedOnMe(player).expectedPoints != -1 ? "Faço ${getPlayerBasedOnMe(player).expectedPoints.toString()}" : room!.currentPlayer == getIndexOfPlayer(name: getPlayerBasedOnMe(player).name) ? "Jogando..." : "Aguardando ..." ),
-          AppIcon(name: getPlayerBasedOnMe(player).name, points: getPlayerBasedOnMe(player).fails),
+          AppText(text: _getPlayerBasedOnMe(player).expectedPoints != -1 ? "Faço ${_getPlayerBasedOnMe(player).expectedPoints.toString()}" : room!.currentPlayer == _getIndexOfPlayer(name: _getPlayerBasedOnMe(player).name) ? "Jogando..." : "Aguardando ..." ),
+          AppIcon(name: _getPlayerBasedOnMe(player).name, points: _getPlayerBasedOnMe(player).points),
         ],
       ),
     );
   }
 
-  Widget board(int player, bool vertical, bool hiddenFirst, bool isMe) {
+  Widget _board(int player, bool vertical, bool hiddenFirst, bool isMe) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      color: getColorOfPlayer(name: getPlayerBasedOnMe(player).name).
-      withOpacity((room!.currentPlayer == getIndexOfPlayer(name: getPlayerBasedOnMe(player).name) && getPlayerBasedOnMe(player).expectedPoints != -1) ? highOp ? 0.8 : 0.5 : 0.2),
+      color: _getColorOfPlayer(name: _getPlayerBasedOnMe(player).name).
+      withOpacity((room!.currentPlayer == _getIndexOfPlayer(name: _getPlayerBasedOnMe(player).name) && _getPlayerBasedOnMe(player).expectedPoints != -1) ? highOp ? 0.8 : 0.5 : 0.2),
       child: Flex(
         direction: vertical ? Axis.vertical : Axis.horizontal,
         children: [
@@ -249,10 +237,10 @@ class _HomePageState extends State<HomePage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if(!hiddenFirst)
-                  widgetCards(sortedCards(player), CardPlace.table, vertical),
-                widgetCards(cards.where((element) => (element.playerName == getPlayerBasedOnMe(player).name && element.round == 0)).toList(), isMe ? CardPlace.myHand : CardPlace.otherHand, vertical),
+                  _widgetCards(_sortedRoundCards(player), CardPlace.table, vertical),
+                _widgetCards(cards.where((element) => (element.playerName == _getPlayerBasedOnMe(player).name && element.round == 0)).toList(), isMe ? CardPlace.myHand : CardPlace.otherHand, vertical),
                 if(hiddenFirst)
-                  widgetCards(sortedCards(player), CardPlace.table, vertical),
+                  _widgetCards(_sortedRoundCards(player), CardPlace.table, vertical),
               ],
             ),
           ),
@@ -265,11 +253,11 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     window.onBeforeUnload.listen((event) async{
       if(players.length == 1) {
-        await repository.removePlayer(widget.roomId, getPlayer(name: widget.playerName));
+        await repository.removePlayer(widget.roomId, _getPlayer(name: widget.playerName));
         await repository.removeRoom(widget.roomId);
       }
       else {
-        await repository.removePlayer(widget.roomId, getPlayer(name: widget.playerName));
+        await repository.removePlayer(widget.roomId, _getPlayer(name: widget.playerName));
       }
     });
 
@@ -289,8 +277,8 @@ class _HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [    
                     Container(
-                      width: 200,
-                      height: 50,
+                      width: Dimensions.width(10),
+                      height: Dimensions.height(5),
                       padding: const EdgeInsets.all(5),
                       child: const Center(
                         child: AppText(
@@ -301,7 +289,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Expanded(
                       child: SizedBox(
-                        width: 200,
+                        width: Dimensions.width(10),
                         child: SingleChildScrollView(
                           controller: scrollController,
                           child: Column(
@@ -309,14 +297,14 @@ class _HomePageState extends State<HomePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               for(MessageModel msg in messages)
-                              MessageWidget(msg: msg, player: widget.playerName, color: getColorOfPlayer(name: msg.playerName)),
+                              MessageWidget(msg: msg, player: widget.playerName, color: _getColorOfPlayer(name: msg.playerName)),
                             ],
                           ),
                         ),
                       ),
                     ),  
                     SizedBox(
-                      width: 200,
+                      width: Dimensions.width(10),
                       child: TextField(
                         autofocus: true,
                         focusNode: focusNode,
@@ -347,24 +335,24 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),  
                     ),   
-                    if (getIndexOfPlayer() == 0)
+                    if (_getIndexOfPlayer() == 0)
                     Button(
                       text:"Nova rodada",
-                      width: 170,
+                      width: Dimensions.width(8),
                       onTap: () {
-                        newRound();
+                        _newRound();
                       },
                     ),
                     if(players.length > 1)
                     NumberGrid(
                       cards: room?.cards ?? 0,
-                      prohibited: (getPlayerBasedOnMe(1) == players[room!.dealerPlayer] && room!.cards != 1) ? (room!.cards - (players.fold(0, (int sum, item) => sum + item.expectedPoints) + 1)) : -1,
-                      color: getColorOfPlayer().withOpacity((room!.currentPlayer == getIndexOfPlayer() && getPlayer().expectedPoints == -1) ? highOp ? 0.8 : 0.5 : 0.0),
+                      prohibited: (_getPlayerBasedOnMe(1) == players[room!.dealerPlayer] && room!.cards != 1) ? (room!.cards - (players.fold(0, (int sum, item) => sum + item.expectedPoints) + 1)) : -1,
+                      color: _getColorOfPlayer().withOpacity((room!.currentPlayer == _getIndexOfPlayer() && _getPlayer().expectedPoints == -1) ? highOp ? 0.8 : 0.5 : 0.0),
                       onTap: ((p0) async {
-                        PlayerModel player = getPlayer();
-                        if(player.expectedPoints == -1 && room!.currentPlayer == getIndexOfPlayer()) {
+                        PlayerModel player = _getPlayer();
+                        if(player.expectedPoints == -1 && room!.currentPlayer == _getIndexOfPlayer()) {
                           player.expectedPoints = p0;
-                          await changePlayer();
+                          await _changePlayer();
                           await repository.updatePlayer(widget.roomId, player);
                           
                         }
@@ -378,23 +366,23 @@ class _HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     if(players.length > 3)
-                    board(3, true, true, false), // left
+                    _board(3, true, true, false), // left
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           if(players.length > 1) ... [
-                            board(players.length == 2 ? 1 : 2, false, true, false), // up
-                            playerUI(players.length == 2 ? 1 : 2),
+                            _board(players.length == 2 ? 1 : 2, false, true, false), // up
+                            _playerUI(players.length == 2 ? 1 : 2),
                           ],
                           if(players.length > 2) ... [
                             Expanded(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  players.length > 3 ? playerUI(3) : const SizedBox(),
-                                  playerUI(1),
+                                  players.length > 3 ? _playerUI(3) : const SizedBox(),
+                                  _playerUI(1),
                                 ],
                               )
                             ),
@@ -402,19 +390,17 @@ class _HomePageState extends State<HomePage> {
                             const Expanded(child: SizedBox(),)
                           ],
                           if(players.isNotEmpty) ... [
-                            playerUI(0),
-                            board(0, false, false, true), // down
+                            _playerUI(0),
+                            _board(0, false, false, true), // down
                           ],              
                         ],
                       ),
                     ),
                     if(players.length > 2)
-                    board(1, true, false, false), // right
+                    _board(1, true, false, false), // right
                   ],
                 ),
               ),
-
-              
             ],
           ),
         ),

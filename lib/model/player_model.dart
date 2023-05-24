@@ -2,7 +2,7 @@ class PlayerModel {
   String name;
   int expectedPoints;
   int currentPoints;
-  int fails;
+  int points;
 
   String? refId;
   
@@ -10,7 +10,7 @@ class PlayerModel {
     required this.name,
     this.expectedPoints = -1,
     this.currentPoints = 0,
-    this.fails = 0,
+    this.points = 0,
     this.refId,
   });
   
@@ -19,7 +19,7 @@ class PlayerModel {
       name: json['name'],
       expectedPoints: json['expected_points'],
       currentPoints: json['current_points'],
-      fails: json['fails'],
+      points: json['points'],
       refId: refId,
     );
   }
@@ -29,7 +29,7 @@ class PlayerModel {
       'name': name,
       'expected_points': expectedPoints,
       'current_points': currentPoints,
-      'fails': fails,
+      'points': points,
     };
   }
 }
